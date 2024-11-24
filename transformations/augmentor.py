@@ -55,31 +55,31 @@ class ChartAugmentor:
 
         return PlotBoundingBox(bbox.x, bbox.y, bbox.w, h)
 
-    def mask_image(self, base_image: np.ndarray, overlay_image: np.ndarray, original_bbox: PlotBoundingBox) -> Optional[np.ndarray]:
-        """
-        Overlay image at a random position within the original bounding box while maintaining aspect ratio
+    # def mask_image(self, base_image: np.ndarray, overlay_image: np.ndarray, original_bbox: PlotBoundingBox) -> Optional[np.ndarray]:
+    #     """
+    #     Overlay image at a random position within the original bounding box while maintaining aspect ratio
 
-        Args:
-            base_image: The base image to augment
-            overlay_image: The image to overlay
-            bbox: The current bounding box
-            original_bbox: The original bounding box to stay within
+    #     Args:
+    #         base_image: The base image to augment
+    #         overlay_image: The image to overlay
+    #         bbox: The current bounding box
+    #         original_bbox: The original bounding box to stay within
 
-        Returns:
-            Augmented image or None if operation fails
-        """
-        try:
-            resized_overlay = cv2.resize(overlay_image, (original_bbox.w, original_bbox.h))
+    #     Returns:
+    #         Augmented image or None if operation fails
+    #     """
+    #     try:
+    #         resized_overlay = cv2.resize(overlay_image, (original_bbox.w, original_bbox.h))
 
-            result = base_image.copy()  
-            result[original_bbox.y:original_bbox.y + original_bbox.h,
-                   original_bbox.x:original_bbox.x + original_bbox.w] = resized_overlay
+    #         result = base_image.copy()  
+    #         result[original_bbox.y:original_bbox.y + original_bbox.h,
+    #                original_bbox.x:original_bbox.x + original_bbox.w] = resized_overlay
 
-            return result
+    #         return result
 
-        except Exception as e:
-            logging.error(f"Error in mask_image: {str(e)}")
-            return None
+    #     except Exception as e:
+    #         logging.error(f"Error in mask_image: {str(e)}")
+    #         return None
 
     def save_json(self, data: Dict, save_path: Path) -> bool:
         """Save JSON data to file"""
@@ -195,3 +195,97 @@ class ChartAugmentor:
 
 
 
+def mask_image(base_image: np.ndarray, overlay_image: np.ndarray, base_bbox: PlotBoundingBox) -> np.ndarray:
+    """
+    PRECONDICTION:
+        - base_image and  the original image of overlay_image  has to match size. 
+
+    Resize image to fit the base image
+    Overlay image at a random position within the original bounding box while maintaining aspect ratio
+
+    Args:
+        base_image: The original image (ground truth)
+        overlay_image: The cut-paste image to mask on the base image
+        base_bbox: The bounding box of the base image
+
+    Returns:
+        Augmented image or None if operation fails
+    """
+    try:
+        resized_overlay = cv2.resize(overlay_image, (base_bbox.w, base_bbox.h))
+
+        result = base_image.copy()  
+        result[base_bbox.y:base_bbox.y + base_bbox.h,
+                base_bbox.x:base_bbox.x + base_bbox.w] = resized_overlay
+
+        return result
+
+    except Exception as e:
+        raise f"Error in mask_image: {str(e)}"
+    
+
+def process_single_chart(self, anno_path: Path, num_augmentations: int = 10) -> None:
+    """
+    Process a single chart annotation file with random cropped image selection
+
+    Args:
+        anno_path: Path to the annotation file
+        num_augmentations: Number of augmented images to generate
+    """
+    try:
+        # Load annotation
+        with open(anno_path) as f:
+            data = json.load(f)
+
+        if data['type'] != 'pie':
+            return
+
+        # Get base image
+        image_path = self.paths.image_dir / \
+            anno_path.with_suffix('.png').name
+        base_image = self.load_image(image_path)
+        if base_image is None:
+            logging.error(f"Could not load base image: {image_path}")
+            return
+
+        # Get list of all cropped images
+        crop_paths = list(self.paths.cropped_image_dir.glob('*.png'))
+        if not crop_paths:
+            logging.error(
+                f"No cropped images found in {self.paths.cropped_image_dir}")
+            return
+        sorted(crop_paths)
+        # Extract and extend bbox
+        bbox_data = data['general_figure_info']['figure_info']['bbox']
+        bbox = PlotBoundingBox(**bbox_data)
+        original_bbox = bbox
+        bbox = self.extend_bbox(base_image, bbox)
+
+        # Generate augmentations with different cropped images
+        if num_augmentations == -1:
+            num_augmentations = len(crop_paths)
+        for i in range(num_augmentations):
+            # Randomly select a cropped image
+            crop_path = np.random.choice(crop_paths)
+            cropped_image = self.load_image(crop_path)
+
+            if cropped_image is None:
+                logging.warning(
+                    f"Could not load cropped image: {crop_path}")
+                continue
+
+            # Apply augmentation
+            augmented = self.mask_image(
+                base_image, cropped_image, bbox, original_bbox)
+            if augmented is not None:
+                out_path = self.paths.augmented_dir / \
+                    f"{anno_path.stem}_aug{i}_{crop_path.stem}.png"
+                self.save_image(augmented, out_path)
+                self.save_json(data, self.paths.augmented_dir /
+                                f"{anno_path.stem}_aug{i}_{crop_path.stem}.json")
+            else:
+                logging.warning(
+                    f"Failed to create augmentation {i} with crop {crop_path}")
+
+    except Exception as e:
+        logging.error(f"Error processing {anno_path}: {str(e)}")

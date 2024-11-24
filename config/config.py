@@ -12,11 +12,13 @@ class Config:
     resize_image_size: Tuple[int, int] = field(
         default_factory=lambda: (512, 512))
     transformation: dict[str, Callable] = field(default_factory=lambda: {
-        'color': closest_color,
-        'bbox': scaling_bbox,
-        'text_bbox': scaling_bbox,
-        'figure_info_bbox': scaling_bbox,
+        'color': closest_color, #CHARTQA
+        'bbox': scaling_bbox, #CHARTQA
+        'text_bbox': scaling_bbox,#CHARTQA
+        'figure_info_bbox': scaling_bbox, #CHARTQA
+        'polygon': scaling_bbox #BENETECH
     })
+
 
 # def extend_bbox(image: np.ndarray, bbox: Dict[str, int]):
 

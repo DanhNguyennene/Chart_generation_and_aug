@@ -1,5 +1,8 @@
 
 from lib import *
+
+
+
 PALETTE = {name: to_rgb(hex)
            for name, hex in matplotlib.colors.TABLEAU_COLORS.items()}
 

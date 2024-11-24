@@ -14,7 +14,13 @@ class DataPaths:
 
 @dataclass
 class PlotBoundingBox:
-    """Bounding box representation"""
+    """Bounding box representation
+    STRUCT:
+        x: x-axis
+        y: y-axis
+        w: w-axis
+        h: h-axis
+    """
     x: int
     y: int
     w: int

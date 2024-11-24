@@ -100,7 +100,7 @@ class ChartAugmentor:
 
         return PlotBoundingBox(bbox.x, bbox.y, bbox.w, h)
 
-    def mask_image(self, base_image: np.ndarray, overlay_image: np.ndarray, bbox: PlotBoundingBox, original_bbox: PlotBoundingBox) -> Optional[np.ndarray]:
+    def mask_image(self, base_image: np.ndarray, overlay_image: np.ndarray, original_bbox: PlotBoundingBox) -> Optional[np.ndarray]:
         """
         Overlay image at a random position within the original bounding box while maintaining aspect ratio
 
@@ -114,54 +114,11 @@ class ChartAugmentor:
             Augmented image or None if operation fails
         """
         try:
-            # Calculate aspect ratios
-            overlay_ratio = overlay_image.shape[1] / \
-                overlay_image.shape[0]  # width/height
-            original_ratio = original_bbox.w / original_bbox.h
+            resized_overlay = cv2.resize(overlay_image, (original_bbox.w, original_bbox.h))
 
-            # Resize overlay image to fit within original bbox while maintaining aspect ratio
-            if overlay_ratio > original_ratio:
-                # Width limited
-                new_width = original_bbox.w
-                new_height = int(new_width / overlay_ratio)
-            else:
-                # Height limited
-                new_height = original_bbox.h
-                new_width = int(new_height * overlay_ratio)
-
-            # Ensure we don't make the image larger than original
-            new_width = min(new_width, original_bbox.w)
-            new_height = min(new_height, original_bbox.h)
-
-            # Resize overlay image
-            resized_overlay = cv2.resize(
-                overlay_image, (new_width, new_height))
-
-            # Calculate available space for random positioning
-            x_space = original_bbox.w - new_width
-            y_space = original_bbox.h - new_height
-
-            # Generate random position within the original bbox
-            if x_space > 0:
-                rand_x = original_bbox.x + np.random.randint(0, x_space + 1)
-            else:
-                rand_x = original_bbox.x
-
-            if y_space > 0:
-                rand_y = original_bbox.y + np.random.randint(0, y_space + 1)
-            else:
-                rand_y = original_bbox.y
-
-            # Create result image
-            result = base_image.copy()
-
-            # First white out the original bbox area
+            result = base_image.copy()  
             result[original_bbox.y:original_bbox.y + original_bbox.h,
-                   original_bbox.x:original_bbox.x + original_bbox.w] = [255, 255, 255]
-
-            # Then place the resized overlay at random position
-            result[rand_y:rand_y + new_height,
-                   rand_x:rand_x + new_width] = resized_overlay
+                   original_bbox.x:original_bbox.x + original_bbox.w] = resized_overlay
 
             return result
 
@@ -250,36 +207,36 @@ class ChartAugmentor:
         for anno_path in self.paths.anno_dir.glob('*.json'):
             self.process_single_chart(anno_path, num_augmentations)
 
-    def crop_single_image(self, image_path: Path) -> None:
-        """Crop a single image to remove white space"""
-        try:
-            # Load image
-            image = self.load_image(image_path)
-            if image is None:
-                logging.error(f"Could not load image: {image_path}")
-                return
+    # def crop_single_image(self, image_path: Path) -> None:
+    #     """Crop a single image to remove white space"""
+    #     try:
+    #         # Load image
+    #         image = self.load_image(image_path)
+    #         if image is None:
+    #             logging.error(f"Could not load image: {image_path}")
+    #             return
 
-            # Convert to grayscale
-            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    #         # Convert to grayscale
+    #         gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
 
-            # Find bounding box
-            coords = cv2.findNonZero(gray)
-            x, y, w, h = cv2.boundingRect(coords)
+    #         # Find bounding box
+    #         coords = cv2.findNonZero(gray)
+    #         x, y, w, h = cv2.boundingRect(coords)
 
-            # Crop image
-            cropped = image[y:y+h, x:x+w]
+    #         # Crop image
+    #         cropped = image[y:y+h, x:x+w]
 
-            # Save cropped image
-            save_path = self.paths.cropped_image_dir / image_path.name
-            self.save_image(cropped, save_path)
+    #         # Save cropped image
+    #         save_path = self.paths.cropped_image_dir / image_path.name
+    #         self.save_image(cropped, save_path)
 
-        except Exception as e:
-            logging.error(f"Error cropping {image_path}: {str(e)}")
+    #     except Exception as e:
+    #         logging.error(f"Error cropping {image_path}: {str(e)}")
 
-    def crop_all_images(self) -> None:
-        """Crop all images in the dataset"""
-        for image_path in self.paths.image_dir.glob('*.png'):
-            self.crop_single_image(image_path)
+    # def crop_all_images(self) -> None:
+    #     """Crop all images in the dataset"""
+    #     for image_path in self.paths.image_dir.glob('*.png'):
+    #         self.crop_single_image(image_path)
 
 
 def visualize_image(image: np.ndarray, json_dict: dict) -> np.ndarray:
